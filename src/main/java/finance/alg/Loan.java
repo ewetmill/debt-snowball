@@ -21,6 +21,21 @@ public class Loan
       theMonthlyPayment = monthlyPayment.setScale(2, BigDecimal.ROUND_HALF_UP);
    }
 
+   public BigDecimal getBalance()
+   {
+      return thePresentValue;
+   }
+   
+   public BigDecimal getApr()
+   {
+      return theApr;
+   }
+   
+   public BigDecimal getPayment()
+   {
+      return theMonthlyPayment;
+   }
+   
    public List<Payment> amortizationSchedule()
    {
 	   List<Payment> schedule = new ArrayList<>();
@@ -30,13 +45,13 @@ public class Loan
 
 	   while (balance.compareTo(BigDecimal.ZERO) < 0)
 	   {
-	      BigDecimal monthlyInterest = balance.multiply(monthlyInterestRate);
+	      BigDecimal monthlyInterest = balance.multiply(monthlyInterestRate).setScale(2, BigDecimal.ROUND_HALF_UP);
 	      BigDecimal monthlyPrinciple = theMonthlyPayment.subtract(monthlyInterest);
 	      if (balance.abs().compareTo(monthlyPrinciple) < 0)
 	      {
 	    	  monthlyPrinciple = balance.abs();
 	      }
-	      schedule.add(new Payment(monthlyPrinciple.setScale(2, BigDecimal.ROUND_HALF_DOWN), monthlyInterest.setScale(2, BigDecimal.ROUND_HALF_DOWN)));
+	      schedule.add(new Payment(monthlyPrinciple, monthlyInterest));
 	      BigDecimal nextBalance = balance.add(monthlyPrinciple);
 
 	      if (nextBalance.compareTo(BigDecimal.ZERO) < 0)
@@ -76,18 +91,17 @@ public class Loan
    }
 
    /**
-	*  n = - (LN(1-(B/m)*(r/q)))/LN(1+(r/q))
-    *  # years = - 1/q * (LN(1-(B/m)*(r/q)))/LN(1+(r/q))
-    *
-    * Where:
-    *
-    * q = amount of annual payment periods
-    * r = interest rate
-    * B = principal
-    * m = payment amount
-    * n = amount payment periods
-    * LN = natural logarithm 
-    *
+	*  P = P*(1 -((1 + J)**t - 1)/((1 + J)**N - 1))
+   *
+   * where:
+   *
+   * P = principal, the initial amount of the loan
+   * I = the annual interest rate (from 1 to 100 percent)
+   * L = length, the length (in years) of the loan, or at least the length over which the loan is amortized.
+   * J = monthly interest in decimal form = I / (12 x 100)
+   * N = number of months over which loan is amortized = L x 12
+   * t=number of paid monthly loan payments 
+   *
 	* @param presentValue
 	* @param annualInterestRate
 	* @param paymentsInMonths
@@ -95,13 +109,15 @@ public class Loan
 	*/
    public BigDecimal futureValue(Integer paymentsInMonths)
    {
-      BigDecimal monthlyInterestRate = theApr.divide(new BigDecimal(12), 12, BigDecimal.ROUND_HALF_DOWN);
-      BigDecimal fv = thePresentValue.multiply(monthlyInterestRate.add(new BigDecimal(1)).pow(paymentsInMonths));
-
-      System.out.println("Annual Rate: " + theApr);
-      System.out.println("Monthly Rate: " + monthlyInterestRate);
-      System.out.println("Future Value: " + fv);
-
+      List<Payment> schedule = amortizationSchedule();
+      
+      BigDecimal totalPayed = BigDecimal.ZERO;
+      for (int paymentNumber = 0; paymentNumber < paymentsInMonths; paymentNumber++)
+      {
+         Payment payment = schedule.get(paymentNumber);
+         totalPayed = totalPayed.add(payment.getPrinciple());
+      }
+      BigDecimal fv = getBalance().add(totalPayed);
       return fv.setScale(2, BigDecimal.ROUND_HALF_DOWN);
    }
 
@@ -131,6 +147,16 @@ public class Loan
 		   theInterest = interest;
 	   }
 	   
+	   public BigDecimal getPrinciple()
+	   {
+	      return thePrinciple;
+	   }
+	   
+	   public BigDecimal getInterest()
+	   {
+	      return theInterest;
+	   }
+	   
 	   public String toString()
 	   {
 		   return "Principle:" + thePrinciple + " Interest:" + theInterest;
@@ -145,5 +171,7 @@ public class Loan
       BigDecimal numPayments = loan.numberPayments();
       
       System.out.println("Count Payments:" + payments + " Calc Payments:" + numPayments.setScale(0, BigDecimal.ROUND_CEILING));
+      
+      System.out.println("Future Value after 5 payments:" + loan.futureValue(5));
    }
 }
